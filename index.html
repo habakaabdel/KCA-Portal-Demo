@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KCA Community Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Lusitana:wght@400;700&family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; font-family: "Nunito Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  body {
+    background: #EAECEF;
+    background-image:
+      radial-gradient(circle at 20% 20%, #F7F7F8 0%, transparent 40%),
+      radial-gradient(circle at 80% 80%, #F7F7F8 0%, transparent 40%);
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  #root { width: 100%; display: flex; justify-content: center; }
+  * { box-sizing: border-box; }
+  /* no scrollbars in device */
+  .noscroll::-webkit-scrollbar { display: none; }
+  .noscroll { scrollbar-width: none; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="components/ios-frame.jsx"></script>
+<script type="text/babel" src="components/data.jsx"></script>
+<script type="text/babel" src="components/theme.jsx"></script>
+<script type="text/babel" src="components/motifs.jsx"></script>
+<script type="text/babel" src="components/chrome.jsx"></script>
+<script type="text/babel" src="components/screenHome.jsx"></script>
+<script type="text/babel" src="components/screenServices.jsx"></script>
+<script type="text/babel" src="components/screenEvents.jsx"></script>
+<script type="text/babel" src="components/screenMore.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "kca",
+  "language": "dual",
+  "motifDensity": "rich"
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweaks] = React.useState(() => {
+    try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('kca_tweaks') || '{}') }; }
+    catch { return TWEAK_DEFAULTS; }
+  });
+  React.useEffect(() => {
+    localStorage.setItem('kca_tweaks', JSON.stringify(tweaks));
+  }, [tweaks]);
+
+  const [screen, setScreen] = React.useState(() => localStorage.getItem('kca_screen') || 'home');
+  const [activeService, setActiveService] = React.useState(SERVICES[0]);
+  const [activeEvent, setActiveEvent] = React.useState(null);
+  const [editMode, setEditMode] = React.useState(false);
+  const [direction, setDirection] = React.useState(1);
+  const prevScreen = React.useRef(screen);
+
+  React.useEffect(() => { localStorage.setItem('kca_screen', screen); }, [screen]);
+
+  const goto = React.useCallback((next) => {
+    const order = ['home', 'services', 'serviceDetail', 'book', 'events', 'eventDetail', 'news', 'more', 'resources', 'map'];
+    const dir = order.indexOf(next) > order.indexOf(prevScreen.current) ? 1 : -1;
+    setDirection(dir);
+    prevScreen.current = next;
+    setScreen(next);
+  }, []);
+
+  // Tweaks protocol
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (!e.data) return;
+      if (e.data.type === '__activate_edit_mode') setEditMode(true);
+      if (e.data.type === '__deactivate_edit_mode') setEditMode(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const updateTweak = (k, v) => {
+    setTweaks(t => ({ ...t, [k]: v }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+  };
+
+  const theme = THEMES[tweaks.theme] || THEMES.earth;
+  const lang = tweaks.language;
+
+  const tabFor = (s) => {
+    if (['home'].includes(s)) return 'home';
+    if (['services', 'serviceDetail', 'book'].includes(s)) return 'services';
+    if (['events', 'eventDetail'].includes(s)) return 'events';
+    if (['news'].includes(s)) return 'news';
+    return 'more';
+  };
+  const setTab = (t) => {
+    if (t === 'home') goto('home');
+    if (t === 'services') goto('services');
+    if (t === 'events') goto('events');
+    if (t === 'news') goto('news');
+    if (t === 'more') goto('more');
+  };
+
+  const renderScreen = () => {
+    switch (screen) {
+      case 'home': return <HomeScreen theme={theme} lang={lang} goto={goto} setActiveService={setActiveService} setActiveEvent={setActiveEvent} />;
+      case 'services': return <ServicesScreen theme={theme} lang={lang} goto={goto} setActiveService={setActiveService} />;
+      case 'serviceDetail': return <ServiceDetailScreen service={activeService} theme={theme} lang={lang} goto={goto} />;
+      case 'book': return <BookScreen theme={theme} lang={lang} goto={goto} />;
+      case 'events': return <EventsScreen theme={theme} lang={lang} goto={goto} setActiveEvent={setActiveEvent} />;
+      case 'eventDetail': return <EventDetailScreen event={activeEvent || EVENTS[0]} theme={theme} lang={lang} goto={goto} />;
+      case 'news': return <NewsScreen theme={theme} lang={lang} goto={goto} />;
+      case 'more': return <MoreScreen theme={theme} lang={lang} goto={goto} />;
+      case 'resources': return <ResourcesScreen theme={theme} lang={lang} goto={goto} />;
+      case 'map': return <MapScreen theme={theme} lang={lang} goto={goto} />;
+      default: return <HomeScreen theme={theme} lang={lang} goto={goto} setActiveService={setActiveService} setActiveEvent={setActiveEvent} />;
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <IOSDevice dark={tweaks.theme === 'twilight' || tweaks.theme === 'kcaDark'}>
+        <div style={{
+          height: '100%', width: '100%', background: theme.bg,
+          position: 'relative', overflow: 'hidden',
+        }}>
+          <div
+            key={screen}
+            className="noscroll"
+            style={{
+              height: '100%', width: '100%', overflow: 'auto',
+              animation: `slideIn 280ms cubic-bezier(.2,.8,.2,1)`,
+              transformOrigin: direction > 0 ? 'right center' : 'left center',
+            }}>
+            {renderScreen()}
+          </div>
+          <TabBar active={tabFor(screen)} setActive={setTab} theme={theme} lang={lang} />
+        </div>
+      </IOSDevice>
+
+      {editMode && (
+        <TweaksPanel tweaks={tweaks} update={updateTweak} onClose={() => setEditMode(false)} />
+      )}
+
+      <style>{`
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, update, onClose }) {
+  return (
+    <div style={{
+      position: 'fixed', right: 20, bottom: 20, zIndex: 100,
+      width: 280, background: '#1a1614', color: '#F4EDE0',
+      borderRadius: 16, padding: 16,
+      boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+      border: '1px solid rgba(244,237,224,0.1)',
+      fontFamily: '"Public Sans", system-ui',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 14,
+      }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: '#E8B25C', fontFamily: 'Fraunces', fontStyle: 'italic' }}>Ozhitoowinan</div>
+          <div style={{ fontSize: 16, fontWeight: 600, fontFamily: 'Fraunces' }}>Tweaks</div>
+        </div>
+        <button onClick={onClose} style={{
+          background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff',
+          width: 28, height: 28, borderRadius: 14, cursor: 'pointer',
+        }}>×</button>
+      </div>
+
+      <TweakGroup label="Theme">
+        {Object.entries(THEMES).map(([k, t]) => (
+          <TweakChip key={k} active={tweaks.theme === k} onClick={() => update('theme', k)}>
+            <span style={{
+              display: 'inline-block', width: 10, height: 10, borderRadius: 5,
+              background: t.primary, marginRight: 6, verticalAlign: 'middle',
+            }} />
+            {t.name}
+          </TweakChip>
+        ))}
+      </TweakGroup>
+
+      <TweakGroup label="Language">
+        {[['en', 'English'], ['oj', 'Anishinaabemowin'], ['dual', 'Dual']].map(([k, label]) => (
+          <TweakChip key={k} active={tweaks.language === k} onClick={() => update('language', k)}>{label}</TweakChip>
+        ))}
+      </TweakGroup>
+
+      <div style={{
+        marginTop: 14, fontSize: 11, color: 'rgba(244,237,224,0.5)',
+        lineHeight: 1.5,
+      }}>
+        Motifs are abstract interpretations, not replications of sacred designs.
+      </div>
+    </div>
+  );
+}
+function TweakGroup({ label, children }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{
+        fontSize: 10, fontWeight: 700, letterSpacing: 1.2,
+        textTransform: 'uppercase', color: 'rgba(244,237,224,0.5)',
+        marginBottom: 6,
+      }}>{label}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{children}</div>
+    </div>
+  );
+}
+function TweakChip({ active, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      background: active ? '#E8B25C' : 'rgba(255,255,255,0.08)',
+      color: active ? '#1a1614' : '#F4EDE0',
+      border: 'none', cursor: 'pointer',
+      padding: '6px 12px', borderRadius: 999,
+      fontSize: 12, fontWeight: 600,
+    }}>{children}</button>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
